@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package protos;
+
+// see https://grpc.io/docs/tutorials/basic/go.html#example-code-and-setup for more information 
+
+/*
+
+ Define rpc methods inside your service that specify their request and response types. 
+ gRPC lets you define four kinds of service methods :
+    
+ - A simple RPC where the client sends a request to the server using the stub and waits 
+    for a response to come back just like a normal function call 
+    
+ - A server-side streaming RPC where the client sends a requests to  the server and gets a stream to read
+ a squence of messages back. The client reads from the returned stream until there are no more messages 
+    - You specify a server-side streaming method by placing the stream keyword before the response type  
+
+ - A client-side streaming RPC where the cleint writes a sequence of messages and sends them to the server 
+ using a provided stream. Once the client has finished writing the messages it waits for the server to read them all and return its response. 
+    - You specify a client-side streaming method by placing the stream keyword before the request type
+
+ - A bidirectional streaming RPC where both sides send a sequence of messages using a read-write stream. The two streams operate 
+ independently, so clients and servers can read and write in whatever order they like: for example the server could wait to receive
+ all the client messages before writing its responses or it could alternately read a message then write a message or some other combination of reads and writes.
+ The order of messages in each stream is preserved. 
+    - You specify this type of method by placing the stream keyword before both the request and the response.
+
+*/
+
+// gRPC service
+service RouteGuide {
+
+    // A simple RPC
+    //
+    // obtains the feature at a given position
+    // A Feature with an empty name is returned if there's no feature at the given position.
+    rpc GetFeautre(Point) returns (Feature) {}
+
+    // A Server-to-client streaming RPC
+    //
+    // Obtains the Features available within the given Rectangle. Results are streamed rather than returend at once 
+    // (e.g in a response message with a repeated field), as the rectangle may cover a large area and contain a huge number of features. 
+    rpc ListFeatures(Rectangle) returns (stream  Feature) {}
+
+    // A client-to-server streaming RPC
+    //
+    // Accepts a stream of Points on a route being traversed, returning a RouteSummary when traversal is completed.
+    rpc RecordRoute(stream Point) returns (RouteSummary) {}
+
+    //A Bidirectional streaming RPC
+    //
+    // Accepts a stream  of RouteNotes sent while a route is being traversed, while receiving other routeNotes (e.g. from other users )
+    rpc RouteChat(stream RouteNote) returns (stream RouteNote) {}
+}
+
+
+
+
+
+
+
