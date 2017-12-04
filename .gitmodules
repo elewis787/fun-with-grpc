@@ -13,3 +13,6 @@
 [submodule "vendor/go.uber.org/atomic"]
 	path = vendor/go.uber.org/atomic
 	url = https://github.com/uber-go/atomic
+[submodule "vendor/github.com/golang/protobuf"]
+	path = vendor/github.com/golang/protobuf
+	url = https://github.com/golang/protobuf
