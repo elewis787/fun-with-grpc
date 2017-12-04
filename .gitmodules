@@ -3,7 +3,7 @@
 	url = https://github.com/grpc/grpc-go
 [submodule "vendor/github.com/golang/protobuf"]
 	path = vendor/github.com/golang/protobuf
-	url = https://github.com/golang/protobuf/
+	url = https://github.com/golang/protobuf
 [submodule "vendor/github.com/urfave/cli"]
 	path = vendor/github.com/urfave/cli
 	url = https://github.com/urfave/cli
