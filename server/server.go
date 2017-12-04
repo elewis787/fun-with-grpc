@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"io"
 	"math"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 
@@ -46,9 +48,51 @@ func (s *RouteGuideServerImpl) ListFeatures(rect *protos.Rectangle, stream proto
 	return nil
 }
 
-// RecordRoute -
+// RecordRoute records a route composited of a sequence of points. (client side streaming)
+// It gets a stream of points, and responds with statistics about the "trip":
+// number of points,  number of known features visited, total distance traveled, and
+// total time spent.
+// note : client side streaming is a little abstract for me. The server stream can Recv()
+// build up the response then send it back to the client and close. It is abstract because this
+// function assume that the reader knows the properties for stream. Their is no direct input/oput
+// defined by this function. It is rather defined in the stream itself. It might be worth
+// addign the rpc def in the comments for an example.
+// i.e ( rpc RecordRoute(stream Point) returns (RouteSummary) {} ) <- less abstract :D
 func (s *RouteGuideServerImpl) RecordRoute(stream protos.RouteGuide_RecordRouteServer) error {
-
+	// Construct points for RouteSummary ( which is the return object )
+	var pointCount, featureCount, distance int32
+	var lastPoint *protos.Point
+	startTime := time.Now()
+	for {
+		// get a point
+		point, err := stream.Recv()
+		// We are at the end of the stream
+		if err == io.EOF {
+			endTime := time.Now()
+			// send summary and close the stream
+			err := stream.SendAndClose(&protos.RouteSummary{
+				PointCount:   pointCount,
+				FeatureCount: featureCount,
+				Distance:     distance,
+				ElapsedTime:  int32(endTime.Sub(startTime).Seconds()),
+			})
+			// gRPC layer will handle status code if this is non-nil
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		pointCount++
+		for _, feature := range s.savedFeatures {
+			if proto.Equal(feature.Location, point) {
+				featureCount++
+			}
+		}
+		if lastPoint != nil {
+			distance += calcDistance(lastPoint, point)
+		}
+		lastPoint = point
+	}
 }
 
 // ------ Unexported helpers ------ //
@@ -67,4 +111,32 @@ func inRange(point *pb.Point, rect *pb.Rectangle) bool {
 		return true
 	}
 	return false
+}
+
+// toRadians converts a number to radian
+func toRadians(num float64) float64 {
+	return num * math.Pi / float64(180)
+}
+
+// calcDistance calculates the distance between two points using the "haversine" formula.
+// This code was taken from http://www.movable-type.co.uk/scripts/latlong.html.
+func calcDistance(p1 *pb.Point, p2 *pb.Point) int32 {
+	const CordFactor float64 = 1e7
+	const R float64 = float64(6371000) // metres
+	lat1 := float64(p1.Latitude) / CordFactor
+	lat2 := float64(p2.Latitude) / CordFactor
+	lng1 := float64(p1.Longitude) / CordFactor
+	lng2 := float64(p2.Longitude) / CordFactor
+	φ1 := toRadians(lat1)
+	φ2 := toRadians(lat2)
+	Δφ := toRadians(lat2 - lat1)
+	Δλ := toRadians(lng2 - lng1)
+
+	a := math.Sin(Δφ/2)*math.Sin(Δφ/2) +
+		math.Cos(φ1)*math.Cos(φ2)*
+			math.Sin(Δλ/2)*math.Sin(Δλ/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	distance := R * c
+	return int32(distance)
 }
