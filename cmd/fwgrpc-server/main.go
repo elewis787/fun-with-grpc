@@ -20,7 +20,7 @@ func main() {
 	appConfig := &config{}
 	// Init the urfave cli app
 	app := cli.NewApp()
-	app.Name = "epidemic-cli"
+	app.Name = "fun-with-grpc-server"
 	app.Usage = "cli used to interact with a gRPC server"
 	app.Version = "v0.0.0" // major,minor,patch
 	app.Flags = []cli.Flag{
@@ -57,7 +57,7 @@ func main() {
 		protos.RegisterRouteGuideServer(grpcServer, rs)
 		lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", appConfig.gRCPPort))
 		if err != nil {
-			zlogger.Error("failed to listen")
+			zlogger.Error("fail to listen: ", zap.Error(err))
 			return err
 		}
 		zlogger.Info("serving")
