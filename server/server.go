@@ -2,7 +2,11 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"math"
 	"time"
 
@@ -95,6 +99,49 @@ func (s *RouteGuideServerImpl) RecordRoute(stream protos.RouteGuide_RecordRouteS
 	}
 }
 
+// RouteChat receives a stream of message/location pairs, and responds with a stream of all
+// previous messages at each of those locations. ( bidirectional-streaming)
+// The syntax for reading and writing here is very similar to our client-streaming method,
+// except the server uses the stream’s Send() method rather than SendAndClose() because
+// it’s writing multiple responses. Although each side will always get the other’s messages
+// in the order they were written, both the client and server can read and write in any order
+// — the streams operate completely independently.
+// note : more abstraction but same notes as client
+// rpc RouteChat(stream RouteNote) returns (stream RouteNote) {}
+func (s *routeGuideServer) RouteChat(stream protos.RouteGuide_RouteChatServer) error {
+	for {
+		in, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		key := serialize(in.Location)
+		if _, ok := s.routeNotes[key]; !ok {
+			s.routeNotes[key] = []*protos.RouteNote{in}
+		} else {
+			s.routeNotes[key] = append(s.routeNotes[key], in)
+		}
+		for _, note := range s.routeNotes[key] {
+			if err := stream.Send(note); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// LoadFeatures loads features from a JSON file.
+func (s *routeGuideServer) LoadFeatures(filePath string) {
+	file, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		log.Fatalf("Failed to load default features: %v", err)
+	}
+	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
+		log.Fatalf("Failed to load default features: %v", err)
+	}
+}
+
 // ------ Unexported helpers ------ //
 
 // inRange checks if point is in bounds of Rectangle
@@ -139,4 +186,8 @@ func calcDistance(p1 *pb.Point, p2 *pb.Point) int32 {
 
 	distance := R * c
 	return int32(distance)
+}
+
+func serialize(point *pb.Point) string {
+	return fmt.Sprintf("%d %d", point.Latitude, point.Longitude)
 }
