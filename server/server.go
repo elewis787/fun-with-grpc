@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +9,8 @@ import (
 	"math"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/golang/protobuf/proto"
 
 	"gitlab.com/ethanlewis787/fun-with-grpc/protos"
@@ -17,8 +18,8 @@ import (
 
 // RouteGuideServerImpl - implements the gRPC RouteGuideServer interface
 type RouteGuideServerImpl struct {
-	savedFeatures []*protos.Feature
-	routeNotes    map[string][]*protos.RouteNote
+	SavedFeatures []*protos.Feature
+	RouteNotes    map[string][]*protos.RouteNote
 }
 
 // GetFeature returns the feature at the given point (simple RPC)
@@ -28,7 +29,7 @@ type RouteGuideServerImpl struct {
 // an nil error to tell gRPC that we've finished dealing  with the RPC and that the feature can be returned
 // to the client.
 func (s *RouteGuideServerImpl) GetFeature(ctx context.Context, point *protos.Point) (*protos.Feature, error) {
-	for _, feature := range s.savedFeatures {
+	for _, feature := range s.SavedFeatures {
 		if proto.Equal(feature.Location, point) {
 			return feature, nil
 		}
@@ -42,7 +43,7 @@ func (s *RouteGuideServerImpl) GetFeature(ctx context.Context, point *protos.Poi
 // to rell gRPC that we've finsihed writing responses. Should any error happen in this call, we return a non-nil error
 // The gRPC layer will transalte it into an appropriate RPC status to be sent on the wire.
 func (s *RouteGuideServerImpl) ListFeatures(rect *protos.Rectangle, stream protos.RouteGuide_ListFeaturesServer) error {
-	for _, feature := range s.savedFeatures {
+	for _, feature := range s.SavedFeatures {
 		if inRange(feature.Location, rect) {
 			if err := stream.Send(feature); err != nil {
 				return err
@@ -87,7 +88,7 @@ func (s *RouteGuideServerImpl) RecordRoute(stream protos.RouteGuide_RecordRouteS
 			return err
 		}
 		pointCount++
-		for _, feature := range s.savedFeatures {
+		for _, feature := range s.SavedFeatures {
 			if proto.Equal(feature.Location, point) {
 				featureCount++
 			}
@@ -108,7 +109,7 @@ func (s *RouteGuideServerImpl) RecordRoute(stream protos.RouteGuide_RecordRouteS
 // — the streams operate completely independently.
 // note : more abstraction but same notes as client
 // rpc RouteChat(stream RouteNote) returns (stream RouteNote) {}
-func (s *routeGuideServer) RouteChat(stream protos.RouteGuide_RouteChatServer) error {
+func (s *RouteGuideServerImpl) RouteChat(stream protos.RouteGuide_RouteChatServer) error {
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {
@@ -118,12 +119,12 @@ func (s *routeGuideServer) RouteChat(stream protos.RouteGuide_RouteChatServer) e
 			return err
 		}
 		key := serialize(in.Location)
-		if _, ok := s.routeNotes[key]; !ok {
-			s.routeNotes[key] = []*protos.RouteNote{in}
+		if _, ok := s.RouteNotes[key]; !ok {
+			s.RouteNotes[key] = []*protos.RouteNote{in}
 		} else {
-			s.routeNotes[key] = append(s.routeNotes[key], in)
+			s.RouteNotes[key] = append(s.RouteNotes[key], in)
 		}
-		for _, note := range s.routeNotes[key] {
+		for _, note := range s.RouteNotes[key] {
 			if err := stream.Send(note); err != nil {
 				return err
 			}
@@ -132,12 +133,12 @@ func (s *routeGuideServer) RouteChat(stream protos.RouteGuide_RouteChatServer) e
 }
 
 // LoadFeatures loads features from a JSON file.
-func (s *routeGuideServer) LoadFeatures(filePath string) {
+func (s *RouteGuideServerImpl) LoadFeatures(filePath string) {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		log.Fatalf("Failed to load default features: %v", err)
 	}
-	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
+	if err := json.Unmarshal(file, &s.SavedFeatures); err != nil {
 		log.Fatalf("Failed to load default features: %v", err)
 	}
 }
@@ -145,7 +146,7 @@ func (s *routeGuideServer) LoadFeatures(filePath string) {
 // ------ Unexported helpers ------ //
 
 // inRange checks if point is in bounds of Rectangle
-func inRange(point *pb.Point, rect *pb.Rectangle) bool {
+func inRange(point *protos.Point, rect *protos.Rectangle) bool {
 	left := math.Min(float64(rect.Lo.Longitude), float64(rect.Hi.Longitude))
 	right := math.Max(float64(rect.Lo.Longitude), float64(rect.Hi.Longitude))
 	top := math.Max(float64(rect.Lo.Latitude), float64(rect.Hi.Latitude))
@@ -167,7 +168,7 @@ func toRadians(num float64) float64 {
 
 // calcDistance calculates the distance between two points using the "haversine" formula.
 // This code was taken from http://www.movable-type.co.uk/scripts/latlong.html.
-func calcDistance(p1 *pb.Point, p2 *pb.Point) int32 {
+func calcDistance(p1 *protos.Point, p2 *protos.Point) int32 {
 	const CordFactor float64 = 1e7
 	const R float64 = float64(6371000) // metres
 	lat1 := float64(p1.Latitude) / CordFactor
@@ -188,6 +189,6 @@ func calcDistance(p1 *pb.Point, p2 *pb.Point) int32 {
 	return int32(distance)
 }
 
-func serialize(point *pb.Point) string {
+func serialize(point *protos.Point) string {
 	return fmt.Sprintf("%d %d", point.Latitude, point.Longitude)
 }

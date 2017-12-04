@@ -1,5 +1,6 @@
 package main
 
 type config struct {
-  gRCPPort int
+	filePath string
+	gRCPPort string
 }

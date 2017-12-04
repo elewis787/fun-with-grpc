@@ -10,6 +10,7 @@ import (
 )
 
 func main() {
+	appConfig := &config{}
 	// Init the urfave cli app
 	app := cli.NewApp()
 	app.Name = "epidemic-cli"
